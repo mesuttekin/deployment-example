@@ -2,7 +2,7 @@ terraform {
 
   backend "gcs" {
     bucket  = "example-infra-terraform"
-    prefix  = "tf-demo/state-dev/app1"
+    prefix  = "tf-demo"
     project = "example-infra"
   }
 }
