@@ -1,7 +1,7 @@
 terraform {
   backend "gcs" {
-    bucket  = "gcp-clearify-terraform"
+    bucket  = "example-infra-terraform"
     prefix  = "tf-demo/state-dev/app1"
-    project = "gcp-foundation-shared-devops"
+    project = "example-infra"
   }
 }
