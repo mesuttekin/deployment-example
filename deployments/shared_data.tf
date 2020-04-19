@@ -2,8 +2,8 @@ data "terraform_remote_state" "networking-dev" {
   backend = "gcs"
 
   config {
-    bucket  = "gcp-clearify-terraform"
+    bucket  = "example-infra-terraform"
     prefix  = "tf-demo/state/networking"
-    project = "gcp-foundation-shared-devops"
+    project = "example-infra"
   }
 }
