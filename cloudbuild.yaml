@@ -21,6 +21,7 @@ steps:
   - validate
   - terraform.json
   - --offline
+  - --ancestry
   - --policy-path=../../../policy-library/
   - --project
   - "example-infra"
