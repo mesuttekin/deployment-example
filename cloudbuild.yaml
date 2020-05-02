@@ -20,6 +20,7 @@ steps:
   args:
   - validate
   - terraform.json
+  - --offline
   - --policy-path=../../../policy-library/
   - --project
   - "example-infra"
