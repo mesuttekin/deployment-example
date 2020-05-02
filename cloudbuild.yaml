@@ -12,10 +12,10 @@ steps:
   dir: deployments/app1/dev
   args:
   - convert
-  - terraform.tfplan
+  - terraform.json
 - name: gcr.io/config-validator/terraform-validator
   dir: deployments/app1/dev
   args:
   - validate
-  - terraform.tfplan
+  - terraform.json
   -  --policy-path=../../../policy-library/
