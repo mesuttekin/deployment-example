@@ -21,3 +21,5 @@ steps:
   - validate
   - terraform.json
   - --policy-path=../../../policy-library/
+  - --project
+  - "example-infra"
