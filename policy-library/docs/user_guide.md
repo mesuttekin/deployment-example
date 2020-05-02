@@ -13,11 +13,9 @@
   * [For local development environments](#for-local-development-environments)
   * [For Production Environments](#for-production-environments)
 * [How to Use Forseti Config Validator](#how-to-use-forseti-config-validator)
-  * [Install Forseti](#install-forseti)
-  * [Copy over policy library repository](#copy-over-policy-library-repository)
-  * [How to change the run frequency of Forseti](#how-to-change-the-run-frequency-of-forseti)
-  * [How to handle scaling for large resource sets](#how-to-handle-scaling-for-large-resource-sets)
-  * [How to connect violation results with Cloud Security Command Center (CSCC)](#how-to-connect-violation-results-with-cloud-security-command-center-cscc)
+  * [Deploy Forseti](#deploy-forseti)
+  * [Policy Library Sync from Git Repository](https://forsetisecurity.org/docs/latest/configure/config-validator/policy-library-sync-from-git-repo.html)
+  * [Policy Library Sync from GCS](https://forsetisecurity.org/docs/latest/configure/config-validator/policy-library-sync-from-gcs.html)
 * [End to end workflow with sample constraint](#end-to-end-workflow-with-sample-constraint)
 * [Contact Info](#contact-info)
 
@@ -80,28 +78,61 @@ The Policy Library repository contains the following directories:
     files.
 
 Google provides a sample repository with a set of pre-defined constraint
-templates. You will first clone the repository:
+templates. You can duplicate this repository into a private repository. First
+you should create a new **private** git repository. For example, if you use
+GitHub then you can use the [GitHub UI](https://github.com/new). Then follow the
+steps below to get everything setup. If you are planning on using the [Policy
+Library Sync feature of Forseti](#policy-library-sync), then you should also add
+a read-only user to the private repository which will be used by Forseti.
+
+This policy library can also be made public, but it is not recommended. By
+making your policy library public, it would be allowing others to see what you
+are and __ARE NOT__ scanning for.
+
+#### Duplicate Policy Library Repository
+
+To run the following commands, you will need to configure git to connect
+securely. It is recommended to connect with SSH. [Here is a helpful resource](https://help.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh) for learning about how
+this works, including steps to set this up for GitHub repositories; other
+providers offer this feature as well.
 
 ```
-git clone https://github.com/forseti-security/policy-library.git
+export GIT_REPO_ADDR="git@github.com:${YOUR_GITHUB_USERNAME}/policy-library.git"
+git clone --bare https://github.com/forseti-security/policy-library.git
+cd policy-library.git
+git push --mirror ${GIT_REPO_ADDR}
+cd ..
+rm -rf policy-library.git
+git clone ${GIT_REPO_ADDR}
 ```
+
+#### Setup Constraints
 
 Then you need to examine the available constraint templates inside the
 `templates` directory. Pick the constraint templates that you wish to use,
-create constraint YAML files correspondings to those templates, and place them
+create constraint YAML files corresponding to those templates, and place them
 under `policies/constraints`. Commit the newly created constraint files to
-**your** Git repository. For example, assuming you have created Git repository
+**your** Git repository. For example, assuming you have created a Git repository
 named "policy-library" under your GitHub account, you can use the following
 commands to perform the initial commit:
 
 ```
-export GIT_REPO_ADDR="git@github.com:${YOUR_GITHUB_USERNAME}/policy-library.git"
 cd policy-library
 # Add new constraints...
-git add .
-git commit -m "Initial commit of policy library"
-git remote add policy-library "${GIT_REPO_ADDR}"
-git push -u policy-library master
+git add --all
+git commit -m "Initial commit of policy library constraints"
+git push -u origin master
+```
+
+#### Pull in latest changes from Public Repository
+
+Periodically you should pull any changes from the public repository, which might
+contain new templates and Rego files.
+
+```
+git remote add public https://github.com/forseti-security/policy-library.git
+git pull public master
+git push origin master
 ```
 
 ### Instantiate constraints
@@ -310,127 +341,28 @@ found. Therefore, you should configure your CI to only proceed to the next step
 
 ## How to Use Forseti Config Validator
 
-### Install Forseti
+### Deploy Forseti
 
-Follow the standard installation process. This guide assumes Terraform is used
-to install Forseti, and Forseti can be installed via its own
-[installer](https://forsetisecurity.org/docs/v2.2/setup/install.html) or
-[Cloud Foundation Toolkit](https://github.com/terraform-google-modules/terraform-google-forseti)
-as well.
+Follow the [documentation on the Forseti Security website](https://forsetisecurity.org/docs/latest/setup/install/index.html)
+to deploy Forseti on GCE. As part of the Terraform configuration, you will need to enable
+Config Validator. Follow the [documentation on the Forseti Security website](https://forsetisecurity.org/docs/latest/configure/config-validator/index.html)
+to set up Config Validator.
 
-If you haven't already, the first step is to
-[Install](https://learn.hashicorp.com/terraform/getting-started/install.html)
-Terraform. Then use the
-[terraform-google-forseti](https://github.com/terraform-google-modules/terraform-google-forseti)
-module to install Forseti. Here is a sample main.tf file modeled mostly from the
-"[simple example](https://github.com/terraform-google-modules/terraform-google-forseti/tree/master/examples/simple_example)":
+#### Provide Policies to Forseti Server
 
-```
-module "forseti" {
-      source  = "terraform-google-modules/forseti/google"
-      version = "~> 1.4"
+The recommended practice is to store the Policy Library in a VCS such as GitHub
+or other git repository. This supports the idea of policy as code and requires
+work to setup the repository and connect it with Forseti. Once the repository is
+setup, then Forseti will automatically
+[sync](https://github.com/kubernetes/git-sync) policy updates to the Forseti
+Server to be used by future scans.
 
+The default behavior of Forseti is to sync the Policy Library from the Forseti
+Server GCS bucket. This requires little setup, but involves manual work to
+create the folder and copy the policies to GCS. 
 
-      domain             = "yourdomain.com"
-      project_id         = "your-forseti-project-id-here"
-      org_id             = "your-org-id-here"
-      …
-      config_validator_enabled = true
-    }
-```
-
-The one important additions is the `config_validator_enabled` field. It is not
-enabled by default; therefore you need to explicitly enable it.
-
-### Copy over policy library repository
-
-Your policy library repository specifies the constraints to be enforced. In
-order for Forseti server to access it, you need to copy it over to Forseti
-server's GCS bucket. Assuming you already have a local copy of your policy
-library repository:
-
-```
-export FORSETI_BUCKET=`terraform output -module=forseti forseti-server-storage-bucket`
-export POLICY_LIBRARY_PATH=path/to/local/policy-library
-gsutil -m rsync -d -r ${POLICY_LIBRARY_PATH}/policies gs://${FORSETI_BUCKET}/policy-library/policies
-gsutil -m rsync -d -r ${POLICY_LIBRARY_PATH}/lib gs://${FORSETI_BUCKET}/policy-library/lib
-```
-
-Example result: ![GCS Bucket Content](user_guide_bucket.png)
-
-After this is done, Forseti will pick up the new policy library content in the
-next scanner run.
-
-### How to change the run frequency of Forseti
-
-The Forseti inventory and scanning processes is scheduled to run by a cron job.
-To update the run frequency of this cron job, you need to understand
-[the time format of a cron job](https://crontab.guru/). After you have your
-desired time format, you can update the run frequency by following the steps
-below:
-
-In main.tf, under module "forseti" include **forseti_run_frequency** and set the
-value to your desired time format. For example, <code><em>"0 */2 * *
-*"</em></code>.
-
-```
-   module "forseti" {
-      ...
-      forseti_run_frequency = "0 */2 * * *"
-    }
-```
-
-Run _terraform plan_ command to see the change and _terraform apply_ command to
-apply the change.
-
-### How to handle scaling for large resource sets
-
-If you want to scale for large resource sets, you need to add more RAM to your
-server**.** Upgrading the Forseti server VM to n1-standard-4 (15GB of RAM)
-should be able to handle most use cases. Depending on the state and size of your
-data, this may trigger a large number of violations. Currently GRPC has a
-payload size limitation of 4MB. If a scanner run results in > 4MB of violation
-data to be generated, that will result in an error.
-
-In the future, we will consider the following changes:
-
-*   Use streaming GRPC or paging the violation results.
-*   Split the dataset into multiple chunks and process them separately.
-
-### How to connect violation results with Cloud Security Command Center (CSCC)
-
-Forseti has a plugin with Cloud Security Command Center (CSCC) which allows you
-to receive PubSubs with CSCC. By subscribing to the PubSub feed, you have
-control of remediating manually or programmatically with Cloud Functions.
-
-To connect to CSCC, you need the following roles:
-
-*   Organization Admin
-*   Security Center Admin
-*   Service Account Admin
-
-Follow step 1-4 listed
-[here](https://forsetisecurity.org/docs/latest/configure/notifier/index.html#setup)
-to set CSCC up for Forseti.
-
-Once you have CSCC set up, you can navigate to the CSCC settings page from the
-Google Cloud Platform (GCP) UI. For example:
-![CSCC Integration](user_guide_cscc.png)
-
-In **main.tf**, under module "forseti", include _cscc_source_id_ and
-_cscc_violations_enabled_. Set _cscc_source_id_ to the source ID generated by
-CSCC for Forseti, and _cscc_violations_enabled** **_to** _true_**.
-
-```
-   module "forseti" {
-      …..
-      cscc_source_id = "YOUR_CSCC_SOURCE_ID_FOR_FORSETI"
-      cscc_violations_enabled = true
-    }
-```
-
-Run _terraform plan_ command to see the change and _terraform apply_ command to
-apply the change.
+Follow the documentation on the Forseti Security website to sync policies
+from the [GCS to the Forseti server](https://forsetisecurity.org/docs/latest/configure/config-validator/policy-library-sync-from-gcs.html), and from [Git Repository to the Forseti server](https://forsetisecurity.org/docs/latest/configure/config-validator/policy-library-sync-from-git-repo.html).
 
 ## End to end workflow with sample constraint
 

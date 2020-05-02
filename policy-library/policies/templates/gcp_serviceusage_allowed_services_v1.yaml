@@ -21,7 +21,6 @@ spec:
     spec:
       names:
         kind: GCPServiceUsageConstraintV1
-        plural: gcpserviceusageconstraintsV1
       validation:
         openAPIV3Schema:
           properties:
@@ -32,7 +31,8 @@ spec:
             services:
               description: "List of APIs to enforce on e.g compute.googleapis.com"
               type: array
-              items: string
+              items:
+                type: string
   targets:
     validation.gcp.forsetisecurity.org:
       rego: | #INLINE("validator/serviceusage_service.rego")
