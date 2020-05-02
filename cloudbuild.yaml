@@ -1,10 +1,13 @@
+---
 steps:
-- name: hashicorp/terraform:0.11.14
+- name: gcr.io/config-validator/terraform-validator
+  entrypoint: terraform
   dir: deployments/app1/dev
   args:
   - init
-- name: hashicorp/terraform:0.11.14
+- name: gcr.io/config-validator/terraform-validator
   dir: deployments/app1/dev
+  entrypoint: terraform
   args:
   - plan
   - -out=terraform.plan
@@ -22,6 +25,3 @@ steps:
   - --policy-path=../../../policy-library/
   - --project
   - "example-infra"
-
-
-
