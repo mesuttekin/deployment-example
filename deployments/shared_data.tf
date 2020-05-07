@@ -4,6 +4,6 @@ data "terraform_remote_state" "networking-dev" {
   config {
     bucket  = "example-infra-terraform"
     prefix  = "tf-demo/state/networking"
-    project = "example-infra"
+    project = "example-infra-274710"
   }
 }
